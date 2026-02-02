@@ -5,74 +5,149 @@
   <title>HKDSE Physics Circuit Builder</title>
   <style>
     body { font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; margin: 0; overflow: hidden; }
-    #sidebar { width: 240px; background: #f4f4f4; padding: 15px; border-right: 1px solid #ccc; display: flex; flex-direction: column; overflow-y: auto; }
+    
+    /* SIDEBAR STYLES */
+    #sidebar { width: 250px; background: #f8f9fa; border-right: 1px solid #ddd; display: flex; flex-direction: column; }
+    #sidebar-content { padding: 15px; overflow-y: auto; flex-grow: 1; }
+    
+    h3 { margin-top: 0; font-size: 14px; text-transform: uppercase; color: #555; letter-spacing: 0.5px; border-bottom: 2px solid #ddd; padding-bottom: 5px; margin-bottom: 15px; }
+    
+    .component-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+    
+    .comp-btn { 
+      background: white; border: 1px solid #ccc; border-radius: 6px; 
+      padding: 10px 5px; cursor: pointer; text-align: center;
+      transition: all 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 70px;
+    }
+    .comp-btn:hover { background: #e9ecef; border-color: #adb5bd; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .comp-btn svg { width: 40px; height: 30px; margin-bottom: 5px; stroke: #333; stroke-width: 2; fill: none; }
+    .comp-btn span { font-size: 11px; color: #333; font-weight: 500; }
+
+    .full-width { grid-column: span 2; height: auto; flex-direction: row; gap: 10px; padding: 10px; }
+    
+    /* CONTROLS & PROPERTIES */
+    .toggle-section { margin-bottom: 20px; background: white; padding: 10px; border-radius: 6px; border: 1px solid #eee; }
+    .toggle-label { display: flex; align-items: center; font-size: 12px; margin-bottom: 6px; cursor: pointer; color: #444; }
+    .toggle-label input { margin-right: 8px; }
+
+    .prop-box { margin-top: auto; padding: 15px; background: #e8f0fe; border-top: 1px solid #d2e3fc; display: none; }
+    .prop-box label { display: block; margin-bottom: 4px; font-size: 11px; font-weight: bold; color: #1967d2; }
+    .prop-box input[type="text"] { width: 95%; padding: 6px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; }
+    
+    .export-btn { 
+      width: 100%; padding: 10px; background: #34a853; color: white; border: none; 
+      border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; 
+    }
+    .export-btn:hover { background: #2d9249; }
+    
+    .clear-btn {
+      width: 100%; padding: 8px; background: #fff; color: #d93025; border: 1px solid #d93025;
+      border-radius: 4px; cursor: pointer; margin-top: 5px; font-size: 12px;
+    }
+    .clear-btn:hover { background: #fce8e6; }
+
+    /* CANVAS */
     #canvas-container { flex-grow: 1; position: relative; background: #fff; cursor: crosshair; }
     canvas { display: block; width: 100%; height: 100%; }
-    
-    h3 { margin-top: 0; font-size: 16px; color: #333; }
-    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 20px; }
-    button { 
-      padding: 8px; font-size: 12px; cursor: pointer; 
-      background: white; border: 1px solid #aaa; border-radius: 4px;
-      transition: background 0.1s;
-    }
-    button:hover { background: #e0e0e0; }
-    button.full-width { grid-column: span 2; background: #e8f0fe; border-color: #4285f4; color: #1a73e8; font-weight: bold; }
-    button.export-btn { grid-column: span 2; background: #daf8e1; border-color: #2e7d32; color: #1b5e20; margin-top: auto; }
-
-    .prop-box { margin-top: 20px; padding: 15px; background: #e8e8e8; border-radius: 6px; display: none; }
-    .prop-box label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: bold; }
-    .prop-box input[type="text"] { width: 90%; padding: 4px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 3px; }
-    
-    .toggle-section { margin-bottom: 20px; border-top: 1px solid #ddd; padding-top: 10px; }
-    .toggle-label { display: block; font-size: 13px; margin-bottom: 5px; cursor: pointer; }
-    .help-text { font-size: 11px; color: #666; font-style: italic; margin-top: 5px; line-height: 1.4; }
   </style>
 </head>
 <body>
 
 <div id="sidebar">
-  <h3>Components</h3>
-  <div class="controls">
-    <button onclick="addComponent('resistor')">Resistor</button>
-    <button onclick="addComponent('bulb')">Bulb</button>
-    <button onclick="addComponent('battery')">Battery</button>
-    <button onclick="addComponent('switch')">Switch</button>
-    <button onclick="addComponent('ammeter')">Ammeter</button>
-    <button onclick="addComponent('voltmeter')">Voltmeter</button>
-    <button onclick="addComponent('diode')">Diode</button>
-    <button class="full-width" onclick="addWire()">+ Straight Wire</button>
-  </div>
+  <div id="sidebar-content">
+    <h3>Add Components</h3>
+    <div class="component-grid">
+      <!-- Resistor -->
+      <div class="comp-btn" onclick="addComponent('resistor')">
+        <svg viewBox="-30 -15 60 30"><rect x="-25" y="-10" width="50" height="20" rx="0" /></svg>
+        <span>Resistor</span>
+      </div>
+      <!-- Bulb -->
+      <div class="comp-btn" onclick="addComponent('bulb')">
+        <svg viewBox="-20 -20 40 40">
+            <circle cx="0" cy="0" r="14" />
+            <path d="M-20 0 L-6 0 A 6 6 0 0 1 6 0 L 20 0" stroke-width="1.5" />
+        </svg>
+        <span>Bulb</span>
+      </div>
+      <!-- Battery -->
+      <div class="comp-btn" onclick="addComponent('battery')">
+        <svg viewBox="-20 -20 40 40">
+            <line x1="-5" y1="-12" x2="-5" y2="12" />
+            <line x1="5" y1="-6" x2="5" y2="6" stroke-width="4" />
+        </svg>
+        <span>Battery</span>
+      </div>
+      <!-- Switch -->
+      <div class="comp-btn" onclick="addComponent('switch')">
+        <svg viewBox="-25 -15 50 30">
+            <circle cx="-12" cy="0" r="3" fill="none" stroke="black" />
+            <circle cx="12" cy="0" r="3" fill="none" stroke="black" />
+            <line x1="-9" y1="-2" x2="8" y2="-10" />
+        </svg>
+        <span>Switch</span>
+      </div>
+      <!-- Ammeter -->
+      <div class="comp-btn" onclick="addComponent('ammeter')">
+        <svg viewBox="-20 -20 40 40">
+            <circle cx="0" cy="0" r="14" />
+            <text x="0" y="5" text-anchor="middle" font-size="16" font-family="serif" fill="black" stroke="none">A</text>
+        </svg>
+        <span>Ammeter</span>
+      </div>
+      <!-- Voltmeter -->
+      <div class="comp-btn" onclick="addComponent('voltmeter')">
+        <svg viewBox="-20 -20 40 40">
+            <circle cx="0" cy="0" r="14" />
+            <text x="0" y="5" text-anchor="middle" font-size="16" font-family="serif" fill="black" stroke="none">V</text>
+        </svg>
+        <span>Voltmeter</span>
+      </div>
+      <!-- Diode -->
+      <div class="comp-btn" onclick="addComponent('diode')">
+        <svg viewBox="-20 -15 40 30">
+            <polygon points="-10,-10 10,0 -10,10" fill="none" stroke="black" />
+            <line x1="10" y1="-10" x2="10" y2="10" />
+        </svg>
+        <span>Diode</span>
+      </div>
+      
+      <!-- Wire -->
+      <div class="comp-btn full-width" onclick="addWire()">
+        <svg viewBox="0 0 100 20" style="width:80px; height:20px;">
+            <line x1="0" y1="10" x2="100" y2="10" />
+            <rect x="0" y="8" width="4" height="4" fill="#666" stroke="none"/>
+            <rect x="96" y="8" width="4" height="4" fill="#666" stroke="none"/>
+        </svg>
+        <span>Straight Wire</span>
+      </div>
+    </div>
 
-  <div class="toggle-section">
-    <label class="toggle-label"><input type="checkbox" id="check-grid" checked onchange="toggleGrid(this.checked)"> Show Grid</label>
-    <label class="toggle-label"><input type="checkbox" id="check-handles" checked onchange="toggleHandles(this.checked)"> Show Wire Points (Dots)</label>
+    <h3>Options</h3>
+    <div class="toggle-section">
+      <label class="toggle-label"><input type="checkbox" id="check-grid" checked onchange="toggleGrid(this.checked)"> Show Grid</label>
+      <label class="toggle-label"><input type="checkbox" id="check-handles" checked onchange="toggleHandles(this.checked)"> Show Wire Points</label>
+    </div>
+    
+    <button class="export-btn" onclick="exportImage()">📷 Save PNG</button>
+    <button class="clear-btn" onclick="clearCanvas()">Clear All</button>
   </div>
   
   <div id="properties" class="prop-box">
     <h4>Properties</h4>
     <div id="common-props">
-      <label>Label / Value:</label>
+      <label>Label:</label>
       <input type="text" id="prop-label" oninput="updateLabel(this.value)">
-      <div class="help-text">
-        Auto-italics for letters.<br>
-        <strong>R_total</strong> &rarr; <i>R</i><sub>total</sub><br>
-        <strong>x^2</strong> &rarr; <i>x</i>²<br>
-        <strong>Space</strong> resets to normal.
-      </div>
-      <button onclick="deleteSelected()" style="width:100%; margin-top:10px; background:#ffdddd; color:red; border-color:red;">Delete Item</button>
+      <div style="font-size:10px; color:#666; margin-bottom:8px;">Try: R_1, V_{in}, x^2, \Omega</div>
+      <button onclick="deleteSelected()" style="width:100%; background:#fff; border:1px solid #d93025; color:#d93025; border-radius:3px; padding:4px; cursor:pointer;">Delete</button>
     </div>
     
-    <div id="wire-props" style="display:none; margin-top:10px; border-top:1px solid #ccc; padding-top:10px;">
-      <label><input type="checkbox" id="prop-current" onchange="toggleCurrent(this.checked)"> Show Current Arrow</label>
+    <div id="wire-props" style="display:none;">
+      <label style="margin-top:10px;"><input type="checkbox" id="prop-current" onchange="toggleCurrent(this.checked)"> Show Current Arrow</label>
       <label>Current Value:</label>
-      <input type="text" id="prop-current-val" oninput="updateCurrentVal(this.value)" placeholder="e.g. I_1 = 2A">
+      <input type="text" id="prop-current-val" oninput="updateCurrentVal(this.value)" placeholder="e.g. I = 2A">
     </div>
-  </div>
-
-  <div class="controls" style="margin-top:auto">
-    <button class="export-btn" onclick="exportImage()">📷 Save Diagram (PNG)</button>
-    <button onclick="clearCanvas()" style="grid-column: span 2; margin-top:5px;">Clear All</button>
   </div>
 </div>
 
@@ -88,15 +163,15 @@ let width, height;
 // --- State ---
 let components = [];
 let wires = [];
-let dragging = null;
+let dragging = null; // { item, type, offsetX, offsetY }
 let selected = null;
 
 let showGrid = true;
 let showWireHandles = true;
 
-const SNAP_DIST = 15;     // Distance to snap wire ends to nodes
-const ALIGN_DIST = 15;    // Distance to trigger "magnetic" orthogonal alignment
-const GRID_SIZE = 20;     // Grid spacing for drawing and snapping
+const SNAP_DIST = 15;
+const ALIGN_DIST = 15;
+const GRID_SIZE = 20;
 
 // --- Initialization ---
 function resize() {
@@ -116,22 +191,16 @@ function parseRichText(text) {
     .replace(/\\Omega/g, 'Ω').replace(/\\Delta/g, 'Δ').replace(/\\theta/g, 'θ')
     .replace(/\\alpha/g, 'α').replace(/\\beta/g, 'β').replace(/\\mu/g, 'μ')
     .replace(/\\pi/g, 'π').replace(/\\rho/g, 'ρ');
-
   const segments = [];
   let buffer = "";
   let mode = 'normal';
   let inBrace = false;
-
-  const flush = () => {
-    if (buffer) { segments.push({ text: buffer, mode: mode }); buffer = ""; }
-  };
-
+  const flush = () => { if (buffer) { segments.push({ text: buffer, mode: mode }); buffer = ""; } };
   for (let i = 0; i < p.length; i++) {
     const char = p[i];
     if (char === '{') { inBrace = true; continue; }
     if (char === '}') { inBrace = false; flush(); mode = 'normal'; continue; }
     if (inBrace) { buffer += char; continue; }
-
     if (char === '_') { flush(); mode = 'sub'; }
     else if (char === '^') { flush(); mode = 'super'; }
     else if (char === ' ') { flush(); mode = 'normal'; buffer += " "; }
@@ -141,7 +210,7 @@ function parseRichText(text) {
   return segments;
 }
 
-function drawRichText(ctx, text, x, y, fontSize = 16) {
+function drawRichText(ctx, text, x, y, fontSize = 16, align='center') {
   if (!text) return;
   const segments = parseRichText(text);
   
@@ -161,7 +230,8 @@ function drawRichText(ctx, text, x, y, fontSize = 16) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = 'black';
-  let cursorX = x - totalWidth / 2;
+  
+  let cursorX = (align === 'center') ? x - totalWidth / 2 : x;
   
   for (let seg of segments) {
     let fSize = (seg.mode !== 'normal') ? fontSize * 0.7 : fontSize;
@@ -178,13 +248,15 @@ function drawRichText(ctx, text, x, y, fontSize = 16) {
 }
 
 // --- Models ---
-
 class Component {
   constructor(type, x, y) {
     this.type = type;
     this.x = x;
     this.y = y;
     this.label = "";
+    // Label position relative to component center
+    this.labelX = 0; 
+    this.labelY = -35; 
     this.nodes = this.getNodesConfig(type);
   }
 
@@ -192,8 +264,7 @@ class Component {
     switch(type) {
       case 'resistor': return [{x:-30, y:0}, {x:30, y:0}];
       case 'bulb': return [{x:-20, y:0}, {x:20, y:0}];
-      // Updated Battery Nodes: widened to +/- 20 to match bulb and allow space for leads
-      case 'battery': return [{x:-20, y:0}, {x:20, y:0}]; 
+      case 'battery': return [{x:-20, y:0}, {x:20, y:0}];
       case 'switch': return [{x:-25, y:0}, {x:25, y:0}]; 
       case 'ammeter':
       case 'voltmeter': return [{x:-20, y:0}, {x:20, y:0}];
@@ -222,22 +293,9 @@ class Component {
         ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(-6, 0); ctx.arc(0, 0, 6, Math.PI, 0); ctx.lineTo(20, 0); ctx.stroke();
         break;
       case 'battery':
-        ctx.beginPath(); 
-        // 1. Vertical Plates
-        ctx.moveTo(-5, -15); ctx.lineTo(-5, 15); // Long (Positive)
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.lineWidth = 4; 
-        ctx.moveTo(5, -8); ctx.lineTo(5, 8);   // Short (Negative)
-        ctx.stroke();
-        
-        // 2. Connecting Leads (Fix for gap)
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-20, 0); ctx.lineTo(-5, 0); // Left lead to Positive plate
-        ctx.moveTo(5, 0); ctx.lineTo(20, 0);   // Right lead from Negative plate
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-5, -15); ctx.lineTo(-5, 15); ctx.stroke();
+        ctx.beginPath(); ctx.lineWidth = 4; ctx.moveTo(5, -8); ctx.lineTo(5, 8); ctx.stroke();
+        ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(-5, 0); ctx.moveTo(5, 0); ctx.lineTo(20, 0); ctx.stroke();
         break;
       case 'switch':
         ctx.beginPath(); ctx.arc(-15, 0, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
@@ -262,7 +320,19 @@ class Component {
         ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(20,0); ctx.stroke();
         break;
     }
-    if (this.label) drawRichText(ctx, this.label, 0, -28, 18);
+    
+    // Draw Label (Movable)
+    if (this.label) {
+      ctx.fillStyle = selected === this ? '#2196F3' : 'black';
+      // Draw a small invisible handle box if selected?
+      if (selected === this) {
+          ctx.beginPath();
+          ctx.arc(this.labelX, this.labelY, 3, 0, Math.PI*2);
+          ctx.fill();
+      }
+      drawRichText(ctx, this.label, this.labelX, this.labelY, 18, 'center');
+    }
+    
     ctx.restore();
   }
 
@@ -294,7 +364,7 @@ class Wire {
 }
 
 // --- Global Functions ---
-function addComponent(type) { components.push(new Component(type, width/2 - 50 + Math.random()*50, height/2 - 50 + Math.random()*50)); draw(); }
+function addComponent(type) { components.push(new Component(type, width/2, height/2)); draw(); }
 function addWire() { wires.push(new Wire(width/2 - 50, height/2, width/2 + 50, height/2)); draw(); }
 function toggleGrid(val) { showGrid = val; draw(); }
 function toggleHandles(val) { showWireHandles = val; draw(); }
@@ -326,13 +396,26 @@ function exportImage() {
 function getMouse(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
 function hitTest(x, y) {
+  // 1. Wire Ends
   for (let w of wires) {
     if (Math.hypot(w.x1-x, w.y1-y) < 10) return { item: w, type: 'wireStart' };
     if (Math.hypot(w.x2-x, w.y2-y) < 10) return { item: w, type: 'wireEnd' };
   }
+  // 2. Components & Labels
   for (let c of components) {
+    // Check Label Handle (if label exists)
+    if (c.label) {
+      // Global position of label handle
+      const lx = c.x + c.labelX;
+      const ly = c.y + c.labelY;
+      if (Math.hypot(x - lx, y - ly) < 15) { // Generous hit area for text
+        return { item: c, type: 'label', offsetX: x - lx, offsetY: y - ly };
+      }
+    }
+    // Check Component Body
     if (x > c.x-30 && x < c.x+30 && y > c.y-25 && y < c.y+25) return { item: c, type: 'component', offsetX: x-c.x, offsetY: y-c.y };
   }
+  // 3. Wire Body
   for (let w of wires) {
     const A = x - w.x1, B = y - w.y1, C = w.x2 - w.x1, D = w.y2 - w.y1;
     const dot = A * C + B * D, len_sq = C * C + D * D;
@@ -358,65 +441,55 @@ canvas.addEventListener('mousemove', e => {
   if (!dragging) return;
   const {x, y} = getMouse(e);
 
-  // --- CASE 1: Component Drag (Magnetic Grid) ---
   if (dragging.type === 'component') {
-    let targetX = x - dragging.offsetX;
-    let targetY = y - dragging.offsetY;
-
-    // 1. Grid Snapping
-    if (Math.abs(targetX % GRID_SIZE) < SNAP_DIST) targetX = Math.round(targetX / GRID_SIZE) * GRID_SIZE;
-    if (Math.abs(targetY % GRID_SIZE) < SNAP_DIST) targetY = Math.round(targetY / GRID_SIZE) * GRID_SIZE;
-
-    // 2. Alignment with other components (Optional secondary check)
-    // Note: Grid snapping usually supersedes component alignment if everything is on grid.
-    
-    dragging.item.x = targetX;
-    dragging.item.y = targetY;
+    let tx = x - dragging.offsetX, ty = y - dragging.offsetY;
+    if (Math.abs(tx % GRID_SIZE) < SNAP_DIST) tx = Math.round(tx / GRID_SIZE) * GRID_SIZE;
+    if (Math.abs(ty % GRID_SIZE) < SNAP_DIST) ty = Math.round(ty / GRID_SIZE) * GRID_SIZE;
+    dragging.item.x = tx; dragging.item.y = ty;
   }
-
-  // --- CASE 2: Wire End Drag (Snapping & Grid) ---
+  else if (dragging.type === 'label') {
+    // Move label RELATIVE to component center
+    // Global mouse X - Component X = Relative Label X
+    // We add offset to keep cursor relative to text anchor
+    dragging.item.labelX = (x - dragging.item.x) - dragging.offsetX;
+    dragging.item.labelY = (y - dragging.item.y) - dragging.offsetY;
+  }
   else if (dragging.type === 'wireStart' || dragging.type === 'wireEnd') {
     const w = dragging.item;
-    let targetX = x, targetY = y;
-    const anchorX = (dragging.type === 'wireStart') ? w.x2 : w.x1;
-    const anchorY = (dragging.type === 'wireStart') ? w.y2 : w.y1;
+    let tx = x, ty = y;
+    const ax = (dragging.type === 'wireStart') ? w.x2 : w.x1;
+    const ay = (dragging.type === 'wireStart') ? w.y2 : w.y1;
     let snapped = false;
 
     for (let c of components) {
       for (let n of c.getNodesAbs()) {
-        if (Math.hypot(n.x - x, n.y - y) < SNAP_DIST) { targetX = n.x; targetY = n.y; snapped = true; break; }
+        if (Math.hypot(n.x - x, n.y - y) < SNAP_DIST) { tx = n.x; ty = n.y; snapped = true; break; }
       }
       if (snapped) break;
     }
     if (!snapped) {
       for (let otherW of wires) {
         if (otherW === w) continue;
-        if (Math.hypot(otherW.x1 - x, otherW.y1 - y) < SNAP_DIST) { targetX = otherW.x1; targetY = otherW.y1; snapped = true; break; }
-        if (Math.hypot(otherW.x2 - x, otherW.y2 - y) < SNAP_DIST) { targetX = otherW.x2; targetY = otherW.y2; snapped = true; break; }
+        if (Math.hypot(otherW.x1 - x, otherW.y1 - y) < SNAP_DIST) { tx = otherW.x1; ty = otherW.y1; snapped = true; break; }
+        if (Math.hypot(otherW.x2 - x, otherW.y2 - y) < SNAP_DIST) { tx = otherW.x2; ty = otherW.y2; snapped = true; break; }
       }
     }
     if (!snapped) {
-      if (Math.abs(targetX % GRID_SIZE) < SNAP_DIST) targetX = Math.round(targetX / GRID_SIZE) * GRID_SIZE;
-      if (Math.abs(targetY % GRID_SIZE) < SNAP_DIST) targetY = Math.round(targetY / GRID_SIZE) * GRID_SIZE;
+      if (Math.abs(tx % GRID_SIZE) < SNAP_DIST) tx = Math.round(tx / GRID_SIZE) * GRID_SIZE;
+      if (Math.abs(ty % GRID_SIZE) < SNAP_DIST) ty = Math.round(ty / GRID_SIZE) * GRID_SIZE;
     }
     if (!snapped) {
-      if (Math.abs(targetY - anchorY) < ALIGN_DIST) targetY = anchorY;
-      if (Math.abs(targetX - anchorX) < ALIGN_DIST) targetX = anchorX;
+      if (Math.abs(ty - ay) < ALIGN_DIST) ty = ay;
+      if (Math.abs(tx - ax) < ALIGN_DIST) tx = ax;
     }
 
-    if (dragging.type === 'wireStart') { w.x1 = targetX; w.y1 = targetY; }
-    else { w.x2 = targetX; w.y2 = targetY; }
+    if (dragging.type === 'wireStart') { w.x1 = tx; w.y1 = ty; }
+    else { w.x2 = tx; w.y2 = ty; }
   }
-  
-  // --- CASE 3: Wire Body Drag ---
   else if (dragging.type === 'wireBody') {
     const w = dragging.item;
-    let tx1 = x + dragging.dx1, ty1 = y + dragging.dy1;
-    let tx2 = x + dragging.dx2, ty2 = y + dragging.dy2;
-    // Optional: Snap body movement to grid
-    // w.x1 = tx1; w.y1 = ty1; w.x2 = tx2; w.y2 = ty2; 
-    // Usually wires are moved freely or snapped. Let's leave free to allow precise adjust.
-    w.x1 = tx1; w.y1 = ty1; w.x2 = tx2; w.y2 = ty2;
+    w.x1 = x + dragging.dx1; w.y1 = y + dragging.dy1;
+    w.x2 = x + dragging.dx2; w.y2 = y + dragging.dy2;
   }
 
   draw();
@@ -428,14 +501,16 @@ function selectItem(item) {
   selected = item;
   const box = document.querySelector('.prop-box');
   const wireProps = document.getElementById('wire-props');
+  const commonProps = document.getElementById('common-props');
   const labelInput = document.getElementById('prop-label');
   
   box.style.display = 'block';
   
   if (item instanceof Component) {
-    wireProps.style.display = 'none'; labelInput.value = item.label;
+    wireProps.style.display = 'none'; commonProps.style.display = 'block';
+    labelInput.value = item.label;
   } else if (item instanceof Wire) {
-    wireProps.style.display = 'block'; labelInput.value = ""; 
+    wireProps.style.display = 'block'; commonProps.style.display = 'none';
     document.getElementById('prop-current').checked = item.showCurrent;
     document.getElementById('prop-current-val').value = item.currentLabel;
   }
