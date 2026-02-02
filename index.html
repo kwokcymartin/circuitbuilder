@@ -41,6 +41,10 @@
     .prop-box label { display: block; margin-bottom: 4px; font-size: 11px; font-weight: bold; color: #1967d2; }
     .prop-box input[type="text"] { width: 95%; padding: 6px; margin-bottom: 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; }
     
+    .rotate-controls { display: flex; gap: 5px; margin-bottom: 10px; }
+    .rot-btn { flex: 1; padding: 5px; font-size: 16px; cursor: pointer; background: #fff; border: 1px solid #bbb; border-radius: 3px; }
+    .rot-btn:hover { background: #eef; }
+
     .export-btn { 
       width: 100%; padding: 10px; background: #34a853; color: white; border: none; 
       border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; 
@@ -63,10 +67,9 @@
 <div id="sidebar">
   <div id="sidebar-content">
     
-    <!-- Undo/Redo Buttons -->
     <div class="history-controls">
-      <button class="hist-btn" id="btn-undo" onclick="undo()">↶ Undo (Ctrl+Z)</button>
-      <button class="hist-btn" id="btn-redo" onclick="redo()">↷ Redo (Ctrl+Y)</button>
+      <button class="hist-btn" id="btn-undo" onclick="undo()">↶ Undo</button>
+      <button class="hist-btn" id="btn-redo" onclick="redo()">↷ Redo</button>
     </div>
 
     <h3>Add Components</h3>
@@ -133,7 +136,7 @@
             <rect x="0" y="8" width="4" height="4" fill="#666" stroke="none"/>
             <rect x="96" y="8" width="4" height="4" fill="#666" stroke="none"/>
         </svg>
-        <span>Straight Wire</span>
+        <span>Wire</span>
       </div>
     </div>
 
@@ -149,6 +152,14 @@
   
   <div id="properties" class="prop-box">
     <h4>Properties</h4>
+    
+    <div id="comp-props" style="display:none;">
+      <div class="rotate-controls">
+        <button class="rot-btn" onclick="rotateSelected(-90)" title="Rotate Left">⟲</button>
+        <button class="rot-btn" onclick="rotateSelected(90)" title="Rotate Right">⟳</button>
+      </div>
+    </div>
+
     <div id="common-props">
       <label>Label:</label>
       <input type="text" id="prop-label" onchange="pushHistory()" oninput="updateLabel(this.value)">
@@ -178,7 +189,6 @@ let components = [];
 let wires = [];
 let dragging = null; 
 let selected = null;
-
 let showGrid = true;
 let showWireHandles = true;
 
@@ -186,12 +196,11 @@ const SNAP_DIST = 15;
 const ALIGN_DIST = 15;
 const GRID_SIZE = 20;
 
-// --- History State ---
+// --- History ---
 let historyStack = [];
 let redoStack = [];
 const MAX_HISTORY = 20;
 
-// --- Initialization ---
 function resize() {
   const parent = canvas.parentElement;
   canvas.width = parent.clientWidth;
@@ -203,62 +212,48 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// --- History Functions ---
-
-// Deep copy the current state
+// --- History Logic ---
 function getState() {
-  // We need to serialize the classes to simple objects to store them
-  // When restoring, we must re-instantiate the classes
   return {
-    components: components.map(c => ({...c})), // Shallow copy of properties is enough if no nested objects
+    components: components.map(c => ({...c})),
     wires: wires.map(w => ({...w}))
   };
 }
 
 function restoreState(state) {
-  selected = null; // Deselect on undo/redo to avoid ghost selections
+  selected = null;
   document.querySelector('.prop-box').style.display = 'none';
-
   components = state.components.map(d => {
     let c = new Component(d.type, d.x, d.y);
     Object.assign(c, d);
     return c;
   });
-  
   wires = state.wires.map(d => {
     let w = new Wire(d.x1, d.y1, d.x2, d.y2);
     Object.assign(w, d);
     return w;
   });
-  
   draw();
 }
 
 function pushHistory() {
-  const state = getState();
-  historyStack.push(state);
+  historyStack.push(getState());
   if (historyStack.length > MAX_HISTORY) historyStack.shift();
-  redoStack = []; // Clear redo on new action
+  redoStack = [];
   updateButtons();
 }
 
 function undo() {
   if (historyStack.length === 0) return;
-  // Save current state to redo stack
   redoStack.push(getState());
-  
-  const prevState = historyStack.pop();
-  restoreState(prevState);
+  restoreState(historyStack.pop());
   updateButtons();
 }
 
 function redo() {
   if (redoStack.length === 0) return;
-  // Save current state to history stack
   historyStack.push(getState());
-  
-  const nextState = redoStack.pop();
-  restoreState(nextState);
+  restoreState(redoStack.pop());
   updateButtons();
 }
 
@@ -267,26 +262,15 @@ function updateButtons() {
   document.getElementById('btn-redo').disabled = redoStack.length === 0;
 }
 
-// Keyboard Shortcuts
 document.addEventListener('keydown', (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-    e.preventDefault();
-    undo();
-  }
-  if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-    e.preventDefault();
-    redo();
-  }
-  // Delete key
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
   if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (document.activeElement.tagName !== 'INPUT') { // Don't delete while typing
-         deleteSelected();
-      }
+      if (document.activeElement.tagName !== 'INPUT') deleteSelected();
   }
 });
 
-// --- Rich Text & Models (Unchanged logic, just ensure classes are available) ---
-
+// --- Text Parser ---
 function parseRichText(text) {
   let p = text
     .replace(/\\Omega/g, 'Ω').replace(/\\Delta/g, 'Δ').replace(/\\theta/g, 'θ')
@@ -314,7 +298,6 @@ function parseRichText(text) {
 function drawRichText(ctx, text, x, y, fontSize = 16, align='center') {
   if (!text) return;
   const segments = parseRichText(text);
-  
   let totalWidth = 0;
   ctx.save();
   for (let seg of segments) {
@@ -331,13 +314,11 @@ function drawRichText(ctx, text, x, y, fontSize = 16, align='center') {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = 'black';
-  
   let cursorX = (align === 'center') ? x - totalWidth / 2 : x;
   
   for (let seg of segments) {
     let fSize = (seg.mode !== 'normal') ? fontSize * 0.7 : fontSize;
     let yOffset = (seg.mode === 'sub') ? fontSize * 0.35 : (seg.mode === 'super' ? -fontSize * 0.4 : 0);
-    
     for (let char of seg.text) {
       let isItalic = /[a-zA-Z]/.test(char);
       ctx.font = `${isItalic ? 'italic ' : ''}${fSize}px "Times New Roman", serif`;
@@ -348,11 +329,13 @@ function drawRichText(ctx, text, x, y, fontSize = 16, align='center') {
   ctx.restore();
 }
 
+// --- Models ---
 class Component {
   constructor(type, x, y) {
     this.type = type;
     this.x = x;
     this.y = y;
+    this.rotation = 0; // Angle in radians
     this.label = "";
     this.labelX = 0; 
     this.labelY = -35; 
@@ -375,6 +358,8 @@ class Component {
   draw(ctx) {
     ctx.save();
     ctx.translate(this.x, this.y);
+    ctx.rotate(this.rotation); // Apply rotation
+    
     ctx.strokeStyle = selected === this ? '#2196F3' : 'black';
     ctx.lineWidth = 2;
     ctx.fillStyle = 'white';
@@ -408,6 +393,7 @@ class Component {
         ctx.beginPath(); ctx.arc(0,0, 15, 0, Math.PI*2); ctx.fill(); ctx.stroke();
         ctx.fillStyle = 'black'; ctx.font = 'bold 16px "Times New Roman", serif';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        // Text inside component rotates with it (usually desired for V/A symbols)
         ctx.fillText(this.type === 'ammeter' ? 'A' : 'V', 0, 1);
         ctx.beginPath(); ctx.moveTo(-20,0); ctx.lineTo(-15,0); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(15,0); ctx.lineTo(20,0); ctx.stroke();
@@ -420,16 +406,33 @@ class Component {
         break;
     }
     
+    // Draw Label
     if (this.label) {
+      // 1. Move to label position (which rotates with component body)
+      ctx.translate(this.labelX, this.labelY);
+      
+      // 2. Un-rotate so text stays upright relative to screen
+      ctx.rotate(-this.rotation);
+      
       ctx.fillStyle = selected === this ? '#2196F3' : 'black';
       if (selected === this) {
-          ctx.beginPath(); ctx.arc(this.labelX, this.labelY, 3, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
       }
-      drawRichText(ctx, this.label, this.labelX, this.labelY, 18, 'center');
+      drawRichText(ctx, this.label, 0, 0, 18, 'center');
     }
+    
     ctx.restore();
   }
-  getNodesAbs() { return this.nodes.map(n => ({x: this.x + n.x, y: this.y + n.y})); }
+
+  getNodesAbs() {
+    // Calculate global position of nodes considering rotation
+    const cos = Math.cos(this.rotation);
+    const sin = Math.sin(this.rotation);
+    return this.nodes.map(n => ({
+      x: this.x + (n.x * cos - n.y * sin),
+      y: this.y + (n.x * sin + n.y * cos)
+    }));
+  }
 }
 
 class Wire {
@@ -456,20 +459,9 @@ class Wire {
   }
 }
 
-// --- Interaction Logic with History Hooks ---
-
-function addComponent(type) { 
-  pushHistory();
-  components.push(new Component(type, width/2, height/2)); 
-  draw(); 
-}
-
-function addWire() { 
-  pushHistory();
-  wires.push(new Wire(width/2 - 50, height/2, width/2 + 50, height/2)); 
-  draw(); 
-}
-
+// --- Interaction ---
+function addComponent(type) { pushHistory(); components.push(new Component(type, width/2, height/2)); draw(); }
+function addWire() { pushHistory(); wires.push(new Wire(width/2 - 50, height/2, width/2 + 50, height/2)); draw(); }
 function deleteSelected() { 
   if (selected) {
     pushHistory();
@@ -478,17 +470,19 @@ function deleteSelected() {
     selected = null; document.querySelector('.prop-box').style.display = 'none'; draw();
   }
 }
-
 function clearCanvas() { 
-  if(confirm("Clear diagram?")) { 
-    pushHistory();
-    components = []; wires = []; selected = null; 
-    document.querySelector('.prop-box').style.display = 'none'; draw(); 
-  } 
+  if(confirm("Clear diagram?")) { pushHistory(); components = []; wires = []; selected = null; document.querySelector('.prop-box').style.display = 'none'; draw(); } 
 }
-
 function toggleGrid(val) { showGrid = val; draw(); }
 function toggleHandles(val) { showWireHandles = val; draw(); }
+
+function rotateSelected(angleDeg) {
+  if (selected && selected instanceof Component) {
+    pushHistory();
+    selected.rotation += angleDeg * (Math.PI / 180);
+    draw();
+  }
+}
 
 function exportImage() {
   const tCanvas = document.createElement('canvas'); tCanvas.width = width; tCanvas.height = height;
@@ -506,8 +500,6 @@ function exportImage() {
   const link = document.createElement('a'); link.download = 'circuit.png'; link.href = tCanvas.toDataURL(); link.click();
 }
 
-// --- Drag & Drop with History ---
-
 function getMouse(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
 function hitTest(x, y) {
@@ -517,7 +509,13 @@ function hitTest(x, y) {
   }
   for (let c of components) {
     if (c.label) {
-      const lx = c.x + c.labelX, ly = c.y + c.labelY;
+      // Need complex hit test for label because position depends on rotation
+      // Global Label Pos:
+      const cos = Math.cos(c.rotation), sin = Math.sin(c.rotation);
+      const lx = c.x + (c.labelX * cos - c.labelY * sin);
+      const ly = c.y + (c.labelX * sin + c.labelY * cos);
+      // Wait, draw logic: translate(labelX, labelY) inside rotated context.
+      // So global offset is indeed Vector(labelX, labelY) rotated by c.rotation.
       if (Math.hypot(x - lx, y - ly) < 15) return { item: c, type: 'label', offsetX: x - lx, offsetY: y - ly };
     }
     if (x > c.x-30 && x < c.x+30 && y > c.y-25 && y < c.y+25) return { item: c, type: 'component', offsetX: x-c.x, offsetY: y-c.y };
@@ -536,14 +534,8 @@ function hitTest(x, y) {
 canvas.addEventListener('mousedown', e => {
   const {x, y} = getMouse(e);
   const hit = hitTest(x, y);
-  if (hit) { 
-    // START DRAG: Save history before modification
-    pushHistory(); 
-    dragging = hit; 
-    selectItem(hit.item); 
-  } else { 
-    selected = null; document.querySelector('.prop-box').style.display = 'none'; draw(); 
-  }
+  if (hit) { pushHistory(); dragging = hit; selectItem(hit.item); }
+  else { selected = null; document.querySelector('.prop-box').style.display = 'none'; draw(); }
 });
 
 canvas.addEventListener('mousemove', e => {
@@ -557,8 +549,13 @@ canvas.addEventListener('mousemove', e => {
     dragging.item.x = tx; dragging.item.y = ty;
   }
   else if (dragging.type === 'label') {
-    dragging.item.labelX = (x - dragging.item.x) - dragging.offsetX;
-    dragging.item.labelY = (y - dragging.item.y) - dragging.offsetY;
+    // Reverse rotation to find relative label coords
+    const dx = x - dragging.item.x - dragging.offsetX;
+    const dy = y - dragging.item.y - dragging.offsetY;
+    const r = dragging.item.rotation;
+    // Rotate vector (dx, dy) by -r
+    dragging.item.labelX = dx * Math.cos(-r) - dy * Math.sin(-r);
+    dragging.item.labelY = dx * Math.sin(-r) + dy * Math.cos(-r);
   }
   else if (dragging.type === 'wireStart' || dragging.type === 'wireEnd') {
     const w = dragging.item;
@@ -608,15 +605,20 @@ function selectItem(item) {
   const box = document.querySelector('.prop-box');
   const wireProps = document.getElementById('wire-props');
   const commonProps = document.getElementById('common-props');
+  const compProps = document.getElementById('comp-props');
   const labelInput = document.getElementById('prop-label');
   
   box.style.display = 'block';
   
   if (item instanceof Component) {
-    wireProps.style.display = 'none'; commonProps.style.display = 'block';
+    wireProps.style.display = 'none'; 
+    commonProps.style.display = 'block';
+    compProps.style.display = 'block'; // Show rotate
     labelInput.value = item.label;
   } else if (item instanceof Wire) {
-    wireProps.style.display = 'block'; commonProps.style.display = 'none';
+    wireProps.style.display = 'block'; 
+    commonProps.style.display = 'none';
+    compProps.style.display = 'none';
     document.getElementById('prop-current').checked = item.showCurrent;
     document.getElementById('prop-current-val').value = item.currentLabel;
   }
@@ -639,7 +641,6 @@ function draw() {
   components.forEach(c => c.draw(ctx));
 }
 
-// Initial update for undo/redo buttons
 updateButtons();
 </script>
 </body>
