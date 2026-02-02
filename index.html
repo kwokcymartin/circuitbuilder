@@ -192,7 +192,8 @@ class Component {
     switch(type) {
       case 'resistor': return [{x:-30, y:0}, {x:30, y:0}];
       case 'bulb': return [{x:-20, y:0}, {x:20, y:0}];
-      case 'battery': return [{x:-10, y:0}, {x:10, y:0}];
+      // Updated Battery Nodes: widened to +/- 20 to match bulb and allow space for leads
+      case 'battery': return [{x:-20, y:0}, {x:20, y:0}]; 
       case 'switch': return [{x:-25, y:0}, {x:25, y:0}]; 
       case 'ammeter':
       case 'voltmeter': return [{x:-20, y:0}, {x:20, y:0}];
@@ -221,7 +222,22 @@ class Component {
         ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(-6, 0); ctx.arc(0, 0, 6, Math.PI, 0); ctx.lineTo(20, 0); ctx.stroke();
         break;
       case 'battery':
-        ctx.beginPath(); ctx.moveTo(-5, -15); ctx.lineTo(-5, 15); ctx.lineWidth = 4; ctx.moveTo(5, -8); ctx.lineTo(5, 8); ctx.stroke();
+        ctx.beginPath(); 
+        // 1. Vertical Plates
+        ctx.moveTo(-5, -15); ctx.lineTo(-5, 15); // Long (Positive)
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.lineWidth = 4; 
+        ctx.moveTo(5, -8); ctx.lineTo(5, 8);   // Short (Negative)
+        ctx.stroke();
+        
+        // 2. Connecting Leads (Fix for gap)
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-20, 0); ctx.lineTo(-5, 0); // Left lead to Positive plate
+        ctx.moveTo(5, 0); ctx.lineTo(20, 0);   // Right lead from Negative plate
+        ctx.stroke();
         break;
       case 'switch':
         ctx.beginPath(); ctx.arc(-15, 0, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
@@ -342,17 +358,18 @@ canvas.addEventListener('mousemove', e => {
   if (!dragging) return;
   const {x, y} = getMouse(e);
 
-  // --- CASE 1: Component Drag (Magnetic) ---
+  // --- CASE 1: Component Drag (Magnetic Grid) ---
   if (dragging.type === 'component') {
     let targetX = x - dragging.offsetX;
     let targetY = y - dragging.offsetY;
 
-    // Magnetic Alignment
-    for (let other of components) {
-      if (other === dragging.item) continue;
-      if (Math.abs(targetX - other.x) < ALIGN_DIST) targetX = other.x;
-      if (Math.abs(targetY - other.y) < ALIGN_DIST) targetY = other.y;
-    }
+    // 1. Grid Snapping
+    if (Math.abs(targetX % GRID_SIZE) < SNAP_DIST) targetX = Math.round(targetX / GRID_SIZE) * GRID_SIZE;
+    if (Math.abs(targetY % GRID_SIZE) < SNAP_DIST) targetY = Math.round(targetY / GRID_SIZE) * GRID_SIZE;
+
+    // 2. Alignment with other components (Optional secondary check)
+    // Note: Grid snapping usually supersedes component alignment if everything is on grid.
+    
     dragging.item.x = targetX;
     dragging.item.y = targetY;
   }
@@ -365,14 +382,12 @@ canvas.addEventListener('mousemove', e => {
     const anchorY = (dragging.type === 'wireStart') ? w.y2 : w.y1;
     let snapped = false;
 
-    // 1. Snap to Component Nodes
     for (let c of components) {
       for (let n of c.getNodesAbs()) {
         if (Math.hypot(n.x - x, n.y - y) < SNAP_DIST) { targetX = n.x; targetY = n.y; snapped = true; break; }
       }
       if (snapped) break;
     }
-    // 2. Snap to Wire Junctions
     if (!snapped) {
       for (let otherW of wires) {
         if (otherW === w) continue;
@@ -380,20 +395,10 @@ canvas.addEventListener('mousemove', e => {
         if (Math.hypot(otherW.x2 - x, otherW.y2 - y) < SNAP_DIST) { targetX = otherW.x2; targetY = otherW.y2; snapped = true; break; }
       }
     }
-    
-    // 3. Grid Snapping (If not connected to something else)
     if (!snapped) {
-      // Check X
-      if (Math.abs(targetX % GRID_SIZE) < SNAP_DIST) {
-        targetX = Math.round(targetX / GRID_SIZE) * GRID_SIZE;
-      }
-      // Check Y
-      if (Math.abs(targetY % GRID_SIZE) < SNAP_DIST) {
-        targetY = Math.round(targetY / GRID_SIZE) * GRID_SIZE;
-      }
+      if (Math.abs(targetX % GRID_SIZE) < SNAP_DIST) targetX = Math.round(targetX / GRID_SIZE) * GRID_SIZE;
+      if (Math.abs(targetY % GRID_SIZE) < SNAP_DIST) targetY = Math.round(targetY / GRID_SIZE) * GRID_SIZE;
     }
-
-    // 4. Orthogonal Alignment (Lowest Priority)
     if (!snapped) {
       if (Math.abs(targetY - anchorY) < ALIGN_DIST) targetY = anchorY;
       if (Math.abs(targetX - anchorX) < ALIGN_DIST) targetX = anchorX;
@@ -406,10 +411,12 @@ canvas.addEventListener('mousemove', e => {
   // --- CASE 3: Wire Body Drag ---
   else if (dragging.type === 'wireBody') {
     const w = dragging.item;
-    w.x1 = x + dragging.dx1;
-    w.y1 = y + dragging.dy1;
-    w.x2 = x + dragging.dx2;
-    w.y2 = y + dragging.dy2;
+    let tx1 = x + dragging.dx1, ty1 = y + dragging.dy1;
+    let tx2 = x + dragging.dx2, ty2 = y + dragging.dy2;
+    // Optional: Snap body movement to grid
+    // w.x1 = tx1; w.y1 = ty1; w.x2 = tx2; w.y2 = ty2; 
+    // Usually wires are moved freely or snapped. Let's leave free to allow precise adjust.
+    w.x1 = tx1; w.y1 = ty1; w.x2 = tx2; w.y2 = ty2;
   }
 
   draw();
