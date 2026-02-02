@@ -56,8 +56,8 @@
       <input type="text" id="prop-label" oninput="updateLabel(this.value)">
       <div class="help-text">
         Auto-italics for letters.<br>
-        <strong>R_total</strong> &rarr; <i>R</i><sub>total</sub> (Subscript)<br>
-        <strong>x^2</strong> &rarr; <i>x</i>² (Superscript)<br>
+        <strong>R_total</strong> &rarr; <i>R</i><sub>total</sub><br>
+        <strong>x^2</strong> &rarr; <i>x</i>²<br>
         <strong>Space</strong> resets to normal.
       </div>
       <button onclick="deleteSelected()" style="width:100%; margin-top:10px; background:#ffdddd; color:red; border-color:red;">Delete Item</button>
@@ -94,8 +94,8 @@ let selected = null;
 let showGrid = true;
 let showWireHandles = true;
 
-const SNAP_DIST = 15;
-const ALIGN_DIST = 15;
+const SNAP_DIST = 15;     // Distance to snap wire ends to nodes
+const ALIGN_DIST = 15;    // Distance to trigger "magnetic" alignment
 
 // --- Initialization ---
 function resize() {
@@ -110,77 +110,33 @@ window.addEventListener('resize', resize);
 resize();
 
 // --- Rich Text Parser ---
-
 function parseRichText(text) {
-  // 1. Symbol Replacement
   let p = text
-    .replace(/\\Omega/g, 'Ω')
-    .replace(/\\Delta/g, 'Δ')
-    .replace(/\\theta/g, 'θ')
-    .replace(/\\alpha/g, 'α')
-    .replace(/\\beta/g, 'β')
-    .replace(/\\mu/g, 'μ')
-    .replace(/\\pi/g, 'π')
-    .replace(/\\rho/g, 'ρ');
+    .replace(/\\Omega/g, 'Ω').replace(/\\Delta/g, 'Δ').replace(/\\theta/g, 'θ')
+    .replace(/\\alpha/g, 'α').replace(/\\beta/g, 'β').replace(/\\mu/g, 'μ')
+    .replace(/\\pi/g, 'π').replace(/\\rho/g, 'ρ');
 
-  // 2. Parse into segments
-  // Rules: _ enters sub, ^ enters super. 
-  // Braces { } explicitly group.
-  // Space exits back to normal (unless in brace).
-  
   const segments = [];
   let buffer = "";
-  let mode = 'normal'; // normal, sub, super
+  let mode = 'normal';
   let inBrace = false;
 
   const flush = () => {
-    if (buffer) {
-      segments.push({ text: buffer, mode: mode });
-      buffer = "";
-    }
+    if (buffer) { segments.push({ text: buffer, mode: mode }); buffer = ""; }
   };
 
   for (let i = 0; i < p.length; i++) {
     const char = p[i];
-    
-    // Braces
-    if (char === '{') {
-      inBrace = true;
-      continue;
-    }
-    if (char === '}') {
-      inBrace = false;
-      // Closing brace implicitly ends the current mode's specific group? 
-      // Usually in LaTeX `_{...}` ends the subscript.
-      // Let's assume closing brace returns to normal if we were in sub/super via brace?
-      // For simplicity: } flushes and resets to normal.
-      flush();
-      mode = 'normal';
-      continue;
-    }
+    if (char === '{') { inBrace = true; continue; }
+    if (char === '}') { inBrace = false; flush(); mode = 'normal'; continue; }
+    if (inBrace) { buffer += char; continue; }
 
-    if (inBrace) {
-      buffer += char;
-      continue;
-    }
-
-    // Triggers (only outside braces)
-    if (char === '_') {
-      flush();
-      mode = 'sub';
-    } else if (char === '^') {
-      flush();
-      mode = 'super';
-    } else if (char === ' ') {
-      flush();
-      mode = 'normal';
-      buffer += " "; // Add space to the NEW normal segment
-    } else {
-      buffer += char;
-    }
+    if (char === '_') { flush(); mode = 'sub'; }
+    else if (char === '^') { flush(); mode = 'super'; }
+    else if (char === ' ') { flush(); mode = 'normal'; buffer += " "; }
+    else { buffer += char; }
   }
-  flush(); // Final flush
-
+  flush();
   return segments;
 }
 
@@ -188,32 +144,27 @@ function drawRichText(ctx, text, x, y, fontSize = 16) {
   if (!text) return;
   const segments = parseRichText(text);
   
-  // Measure Total Width for Centering
   let totalWidth = 0;
   ctx.save();
   for (let seg of segments) {
-    let fSize = (seg.mode === 'sub' || seg.mode === 'super') ? fontSize * 0.7 : fontSize;
+    let fSize = (seg.mode !== 'normal') ? fontSize * 0.7 : fontSize;
     for (let char of seg.text) {
-      let isItalic = /[a-zA-Z]/.test(char); // Only letters are italic
+      let isItalic = /[a-zA-Z]/.test(char);
       ctx.font = `${isItalic ? 'italic ' : ''}${fSize}px "Times New Roman", serif`;
       totalWidth += ctx.measureText(char).width;
     }
   }
   ctx.restore();
 
-  // Draw
   ctx.save();
-  ctx.textAlign = 'left'; // We manually manage position
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = 'black';
-  
   let cursorX = x - totalWidth / 2;
   
   for (let seg of segments) {
-    let fSize = (seg.mode === 'sub' || seg.mode === 'super') ? fontSize * 0.7 : fontSize;
-    let yOffset = 0;
-    if (seg.mode === 'sub') yOffset = fontSize * 0.35;
-    if (seg.mode === 'super') yOffset = -fontSize * 0.4;
+    let fSize = (seg.mode !== 'normal') ? fontSize * 0.7 : fontSize;
+    let yOffset = (seg.mode === 'sub') ? fontSize * 0.35 : (seg.mode === 'super' ? -fontSize * 0.4 : 0);
     
     for (let char of seg.text) {
       let isItalic = /[a-zA-Z]/.test(char);
@@ -252,7 +203,6 @@ class Component {
   draw(ctx) {
     ctx.save();
     ctx.translate(this.x, this.y);
-    
     ctx.strokeStyle = selected === this ? '#2196F3' : 'black';
     ctx.lineWidth = 2;
     ctx.fillStyle = 'white';
@@ -261,215 +211,124 @@ class Component {
 
     switch(this.type) {
       case 'resistor':
-        ctx.fillRect(-25, -10, 50, 20);
-        ctx.strokeRect(-25, -10, 50, 20);
+        ctx.fillRect(-25, -10, 50, 20); ctx.strokeRect(-25, -10, 50, 20);
         ctx.beginPath(); ctx.moveTo(-30,0); ctx.lineTo(-25,0); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(25,0); ctx.lineTo(30,0); ctx.stroke();
         break;
-
       case 'bulb':
         ctx.beginPath(); ctx.arc(0,0, 15, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.beginPath(); 
-        ctx.moveTo(-20, 0); ctx.lineTo(-6, 0);
-        ctx.arc(0, 0, 6, Math.PI, 0); 
-        ctx.lineTo(20, 0);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(-6, 0); ctx.arc(0, 0, 6, Math.PI, 0); ctx.lineTo(20, 0); ctx.stroke();
         break;
-
       case 'battery':
-        ctx.beginPath();
-        ctx.moveTo(-5, -15); ctx.lineTo(-5, 15);
-        ctx.lineWidth = 4;
-        ctx.moveTo(5, -8); ctx.lineTo(5, 8);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-5, -15); ctx.lineTo(-5, 15); ctx.lineWidth = 4; ctx.moveTo(5, -8); ctx.lineTo(5, 8); ctx.stroke();
         break;
-
       case 'switch':
-        ctx.beginPath();
-        ctx.arc(-15, 0, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.beginPath();
-        ctx.arc(15, 0, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(-11, -2); ctx.lineTo(10, -12); ctx.stroke();
+        ctx.beginPath(); ctx.arc(-15, 0, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(15, 0, 4, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-11, -2); ctx.lineTo(10, -12); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(-25,0); ctx.lineTo(-19,0); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(25,0); ctx.lineTo(19,0); ctx.stroke();
         break;
-
       case 'ammeter':
       case 'voltmeter':
         ctx.beginPath(); ctx.arc(0,0, 15, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 16px "Times New Roman", serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'black'; ctx.font = 'bold 16px "Times New Roman", serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(this.type === 'ammeter' ? 'A' : 'V', 0, 1);
         ctx.beginPath(); ctx.moveTo(-20,0); ctx.lineTo(-15,0); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(15,0); ctx.lineTo(20,0); ctx.stroke();
         break;
-
       case 'diode':
-        ctx.beginPath();
-        ctx.moveTo(-10, -10); ctx.lineTo(10, 0); ctx.lineTo(-10, 10); ctx.closePath();
-        ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-10, -10); ctx.lineTo(10, 0); ctx.lineTo(-10, 10); ctx.closePath(); ctx.fill(); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(10, -10); ctx.lineTo(10, 10); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(-20,0); ctx.lineTo(-10,0); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(20,0); ctx.stroke();
         break;
     }
-
-    if (this.label) {
-      drawRichText(ctx, this.label, 0, -28, 18); 
-    }
-    
+    if (this.label) drawRichText(ctx, this.label, 0, -28, 18);
     ctx.restore();
   }
 
-  getNodesAbs() {
-    return this.nodes.map(n => ({x: this.x + n.x, y: this.y + n.y}));
-  }
+  getNodesAbs() { return this.nodes.map(n => ({x: this.x + n.x, y: this.y + n.y})); }
 }
 
 class Wire {
   constructor(x1, y1, x2, y2) {
-    this.x1 = x1;
-    this.y1 = y1;
-    this.x2 = x2;
-    this.y2 = y2;
-    this.showCurrent = false;
-    this.currentLabel = "";
+    this.x1 = x1; this.y1 = y1; this.x2 = x2; this.y2 = y2;
+    this.showCurrent = false; this.currentLabel = "";
   }
-
   draw(ctx) {
     ctx.strokeStyle = selected === this ? '#2196F3' : 'black';
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(this.x1, this.y1);
-    ctx.lineTo(this.x2, this.y2);
-    ctx.stroke();
-
+    ctx.beginPath(); ctx.moveTo(this.x1, this.y1); ctx.lineTo(this.x2, this.y2); ctx.stroke();
     if (showWireHandles || selected === this) {
-        ctx.fillStyle = selected === this ? '#2196F3' : '#666';
-        const s = 6;
-        ctx.fillRect(this.x1 - s/2, this.y1 - s/2, s, s);
-        ctx.fillRect(this.x2 - s/2, this.y2 - s/2, s, s);
+      ctx.fillStyle = selected === this ? '#2196F3' : '#666';
+      const s = 6; ctx.fillRect(this.x1 - s/2, this.y1 - s/2, s, s); ctx.fillRect(this.x2 - s/2, this.y2 - s/2, s, s);
     }
-
     if (this.showCurrent) {
-      const mx = (this.x1 + this.x2) / 2;
-      const my = (this.y1 + this.y2) / 2;
+      const mx = (this.x1 + this.x2) / 2, my = (this.y1 + this.y2) / 2;
       const angle = Math.atan2(this.y2 - this.y1, this.x2 - this.x1);
-      
-      ctx.save();
-      ctx.translate(mx, my);
-      ctx.rotate(angle);
-      
-      ctx.fillStyle = 'red';
-      ctx.beginPath();
-      ctx.moveTo(0, 0); ctx.lineTo(-10, -5); ctx.lineTo(-10, 5); ctx.fill();
-      
-      if (this.currentLabel) {
-        ctx.restore();
-        ctx.save();
-        ctx.translate(mx, my - 18);
-        drawRichText(ctx, this.currentLabel, 0, 0, 18); 
-      }
+      ctx.save(); ctx.translate(mx, my); ctx.rotate(angle);
+      ctx.fillStyle = 'red'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-10, -5); ctx.lineTo(-10, 5); ctx.fill();
+      if (this.currentLabel) { ctx.restore(); ctx.save(); ctx.translate(mx, my - 18); drawRichText(ctx, this.currentLabel, 0, 0, 18); }
       ctx.restore();
     }
   }
 }
 
 // --- Global Functions ---
-
-function addComponent(type) {
-  components.push(new Component(type, width/2 - 50 + Math.random()*50, height/2 - 50 + Math.random()*50));
-  draw();
-}
-
-function addWire() {
-  wires.push(new Wire(width/2 - 50, height/2, width/2 + 50, height/2));
-  draw();
-}
-
+function addComponent(type) { components.push(new Component(type, width/2 - 50 + Math.random()*50, height/2 - 50 + Math.random()*50)); draw(); }
+function addWire() { wires.push(new Wire(width/2 - 50, height/2, width/2 + 50, height/2)); draw(); }
 function toggleGrid(val) { showGrid = val; draw(); }
 function toggleHandles(val) { showWireHandles = val; draw(); }
-
-function clearCanvas() {
-  if(confirm("Clear diagram?")) {
-    components = []; wires = []; selected = null;
-    document.querySelector('.prop-box').style.display = 'none';
-    draw();
-  }
-}
-
-function deleteSelected() {
+function clearCanvas() { if(confirm("Clear diagram?")) { components = []; wires = []; selected = null; document.querySelector('.prop-box').style.display = 'none'; draw(); } }
+function deleteSelected() { 
   if (selected) {
     if (selected instanceof Component) components = components.filter(c => c !== selected);
     else wires = wires.filter(w => w !== selected);
-    selected = null;
-    document.querySelector('.prop-box').style.display = 'none';
-    draw();
+    selected = null; document.querySelector('.prop-box').style.display = 'none'; draw();
   }
 }
-
 function exportImage() {
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = width;
-  tempCanvas.height = height;
-  const tCtx = tempCanvas.getContext('2d');
-  tCtx.fillStyle = 'white';
-  tCtx.fillRect(0,0,width,height);
-  
+  const tCanvas = document.createElement('canvas'); tCanvas.width = width; tCanvas.height = height;
+  const tCtx = tCanvas.getContext('2d');
+  tCtx.fillStyle = 'white'; tCtx.fillRect(0,0,width,height);
   if (showGrid) {
-      tCtx.beginPath(); tCtx.strokeStyle = '#f0f0f0'; tCtx.lineWidth = 1;
-      for(let i=0; i<width; i+=20) { tCtx.moveTo(i,0); tCtx.lineTo(i,height); }
-      for(let i=0; i<height; i+=20) { tCtx.moveTo(0,i); tCtx.lineTo(width,i); }
-      tCtx.stroke();
+    tCtx.beginPath(); tCtx.strokeStyle = '#f0f0f0'; tCtx.lineWidth = 1;
+    for(let i=0; i<width; i+=20) { tCtx.moveTo(i,0); tCtx.lineTo(i,height); }
+    for(let i=0; i<height; i+=20) { tCtx.moveTo(0,i); tCtx.lineTo(width,i); }
+    tCtx.stroke();
   }
-  
-  let oldH = showWireHandles;
-  let oldS = selected;
-  showWireHandles = false;
-  selected = null;
-  
-  wires.forEach(w => w.draw(tCtx));
-  components.forEach(c => c.draw(tCtx));
-  
-  showWireHandles = oldH;
-  selected = oldS;
-
-  const link = document.createElement('a');
-  link.download = 'circuit.png';
-  link.href = tempCanvas.toDataURL();
-  link.click();
+  let oldH = showWireHandles, oldS = selected; showWireHandles = false; selected = null;
+  wires.forEach(w => w.draw(tCtx)); components.forEach(c => c.draw(tCtx));
+  showWireHandles = oldH; selected = oldS;
+  const link = document.createElement('a'); link.download = 'circuit.png'; link.href = tCanvas.toDataURL(); link.click();
 }
 
 // --- Interaction ---
-
-function getMouse(e) {
-  const r = canvas.getBoundingClientRect();
-  return { x: e.clientX - r.left, y: e.clientY - r.top };
-}
+function getMouse(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
 function hitTest(x, y) {
+  // 1. Wire Ends
   for (let w of wires) {
     if (Math.hypot(w.x1-x, w.y1-y) < 10) return { item: w, type: 'wireStart' };
     if (Math.hypot(w.x2-x, w.y2-y) < 10) return { item: w, type: 'wireEnd' };
   }
+  // 2. Components
   for (let c of components) {
-    if (x > c.x-30 && x < c.x+30 && y > c.y-25 && y < c.y+25) {
-      return { item: c, type: 'component', offsetX: x-c.x, offsetY: y-c.y };
-    }
+    if (x > c.x-30 && x < c.x+30 && y > c.y-25 && y < c.y+25) return { item: c, type: 'component', offsetX: x-c.x, offsetY: y-c.y };
   }
+  // 3. Wire Body
   for (let w of wires) {
     const A = x - w.x1, B = y - w.y1, C = w.x2 - w.x1, D = w.y2 - w.y1;
     const dot = A * C + B * D, len_sq = C * C + D * D;
-    let param = -1;
-    if (len_sq != 0) param = dot / len_sq;
+    let param = -1; if (len_sq != 0) param = dot / len_sq;
     let xx, yy;
-    if (param < 0) { xx = w.x1; yy = w.y1; }
-    else if (param > 1) { xx = w.x2; yy = w.y2; }
-    else { xx = w.x1 + param * C; yy = w.y1 + param * D; }
-    if (Math.hypot(x - xx, y - yy) < 5) return { item: w, type: 'wireBody' };
+    if (param < 0) { xx = w.x1; yy = w.y1; } else if (param > 1) { xx = w.x2; yy = w.y2; } else { xx = w.x1 + param * C; yy = w.y1 + param * D; }
+    if (Math.hypot(x - xx, y - yy) < 5) return { 
+        item: w, type: 'wireBody', 
+        dx1: w.x1 - x, dy1: w.y1 - y, dx2: w.x2 - x, dy2: w.y2 - y 
+    };
   }
   return null;
 }
@@ -477,24 +336,33 @@ function hitTest(x, y) {
 canvas.addEventListener('mousedown', e => {
   const {x, y} = getMouse(e);
   const hit = hitTest(x, y);
-  if (hit) {
-    dragging = hit;
-    selectItem(hit.item);
-  } else {
-    selected = null;
-    document.querySelector('.prop-box').style.display = 'none';
-    draw();
-  }
+  if (hit) { dragging = hit; selectItem(hit.item); }
+  else { selected = null; document.querySelector('.prop-box').style.display = 'none'; draw(); }
 });
 
 canvas.addEventListener('mousemove', e => {
   if (!dragging) return;
   const {x, y} = getMouse(e);
 
+  // --- CASE 1: Component Drag (Magnetic) ---
   if (dragging.type === 'component') {
-    dragging.item.x = x - dragging.offsetX;
-    dragging.item.y = y - dragging.offsetY;
+    let targetX = x - dragging.offsetX;
+    let targetY = y - dragging.offsetY;
+
+    // Magnetic Alignment Logic: Check against all other components
+    for (let other of components) {
+      if (other === dragging.item) continue; // Don't snap to self
+      // Align X centers
+      if (Math.abs(targetX - other.x) < ALIGN_DIST) targetX = other.x;
+      // Align Y centers
+      if (Math.abs(targetY - other.y) < ALIGN_DIST) targetY = other.y;
+    }
+
+    dragging.item.x = targetX;
+    dragging.item.y = targetY;
   }
+
+  // --- CASE 2: Wire End Drag (Snapping) ---
   else if (dragging.type === 'wireStart' || dragging.type === 'wireEnd') {
     const w = dragging.item;
     let targetX = x, targetY = y;
@@ -502,25 +370,22 @@ canvas.addEventListener('mousemove', e => {
     const anchorY = (dragging.type === 'wireStart') ? w.y2 : w.y1;
     let snapped = false;
 
+    // Snap to Nodes
     for (let c of components) {
       for (let n of c.getNodesAbs()) {
-        if (Math.hypot(n.x - x, n.y - y) < SNAP_DIST) {
-          targetX = n.x; targetY = n.y; snapped = true; break;
-        }
+        if (Math.hypot(n.x - x, n.y - y) < SNAP_DIST) { targetX = n.x; targetY = n.y; snapped = true; break; }
       }
       if (snapped) break;
     }
+    // Snap to other Wires
     if (!snapped) {
       for (let otherW of wires) {
         if (otherW === w) continue;
-        if (Math.hypot(otherW.x1 - x, otherW.y1 - y) < SNAP_DIST) {
-          targetX = otherW.x1; targetY = otherW.y1; snapped = true; break;
-        }
-        if (Math.hypot(otherW.x2 - x, otherW.y2 - y) < SNAP_DIST) {
-          targetX = otherW.x2; targetY = otherW.y2; snapped = true; break;
-        }
+        if (Math.hypot(otherW.x1 - x, otherW.y1 - y) < SNAP_DIST) { targetX = otherW.x1; targetY = otherW.y1; snapped = true; break; }
+        if (Math.hypot(otherW.x2 - x, otherW.y2 - y) < SNAP_DIST) { targetX = otherW.x2; targetY = otherW.y2; snapped = true; break; }
       }
     }
+    // Orthogonal align
     if (!snapped) {
       if (Math.abs(targetY - anchorY) < ALIGN_DIST) targetY = anchorY;
       if (Math.abs(targetX - anchorX) < ALIGN_DIST) targetX = anchorX;
@@ -529,6 +394,16 @@ canvas.addEventListener('mousemove', e => {
     if (dragging.type === 'wireStart') { w.x1 = targetX; w.y1 = targetY; }
     else { w.x2 = targetX; w.y2 = targetY; }
   }
+  
+  // --- CASE 3: Wire Body Drag (Move Whole Object) ---
+  else if (dragging.type === 'wireBody') {
+    const w = dragging.item;
+    w.x1 = x + dragging.dx1;
+    w.y1 = y + dragging.dy1;
+    w.x2 = x + dragging.dx2;
+    w.y2 = y + dragging.dy2;
+  }
+
   draw();
 });
 
@@ -543,52 +418,36 @@ function selectItem(item) {
   box.style.display = 'block';
   
   if (item instanceof Component) {
-    wireProps.style.display = 'none';
-    labelInput.value = item.label;
+    wireProps.style.display = 'none'; labelInput.value = item.label;
   } else if (item instanceof Wire) {
-    wireProps.style.display = 'block';
-    labelInput.value = ""; 
+    wireProps.style.display = 'block'; labelInput.value = ""; 
     document.getElementById('prop-current').checked = item.showCurrent;
     document.getElementById('prop-current-val').value = item.currentLabel;
   }
   draw();
 }
 
-function updateLabel(val) {
-  if (selected && selected instanceof Component) {
-    selected.label = val;
-    draw();
-  }
-}
-
-function toggleCurrent(checked) {
-  if (selected && selected instanceof Wire) {
-    selected.showCurrent = checked;
-    draw();
-  }
-}
-
-function updateCurrentVal(val) {
-  if (selected && selected instanceof Wire) {
-    selected.currentLabel = val;
-    draw();
-  }
-}
+function updateLabel(val) { if (selected && selected instanceof Component) { selected.label = val; draw(); } }
+function toggleCurrent(checked) { if (selected && selected instanceof Wire) { selected.showCurrent = checked; draw(); } }
+function updateCurrentVal(val) { if (selected && selected instanceof Wire) { selected.currentLabel = val; draw(); } }
 
 function draw() {
   ctx.clearRect(0, 0, width, height);
   if (showGrid) {
-    ctx.beginPath();
-    ctx.strokeStyle = '#f0f0f0';
-    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.strokeStyle = '#f0f0f0'; ctx.lineWidth = 1;
     for(let i=0; i<width; i+=20) { ctx.moveTo(i,0); ctx.lineTo(i,height); }
     for(let i=0; i<height; i+=20) { ctx.moveTo(0,i); ctx.lineTo(width,i); }
     ctx.stroke();
   }
   wires.forEach(w => w.draw(ctx));
   components.forEach(c => c.draw(ctx));
+  
+  // Visual feedback for magnetic alignment (optional, but nice)
+  if (dragging && dragging.type === 'component') {
+      // If aligned, maybe draw a faint red line?
+      // (Simplified for this version: just the snap effect)
+  }
 }
-
 </script>
 </body>
 </html>
