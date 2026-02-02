@@ -25,6 +25,12 @@
     .comp-btn span { font-size: 11px; color: #333; font-weight: 500; }
 
     .full-width { grid-column: span 2; height: auto; flex-direction: row; gap: 10px; padding: 10px; }
+
+    /* HISTORY CONTROLS */
+    .history-controls { display: flex; gap: 5px; margin-bottom: 15px; }
+    .hist-btn { flex: 1; padding: 6px; font-size: 12px; cursor: pointer; background: #fff; border: 1px solid #ccc; border-radius: 4px; }
+    .hist-btn:hover { background: #f0f0f0; }
+    .hist-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     
     /* CONTROLS & PROPERTIES */
     .toggle-section { margin-bottom: 20px; background: white; padding: 10px; border-radius: 6px; border: 1px solid #eee; }
@@ -56,6 +62,13 @@
 
 <div id="sidebar">
   <div id="sidebar-content">
+    
+    <!-- Undo/Redo Buttons -->
+    <div class="history-controls">
+      <button class="hist-btn" id="btn-undo" onclick="undo()">↶ Undo (Ctrl+Z)</button>
+      <button class="hist-btn" id="btn-redo" onclick="redo()">↷ Redo (Ctrl+Y)</button>
+    </div>
+
     <h3>Add Components</h3>
     <div class="component-grid">
       <!-- Resistor -->
@@ -138,15 +151,15 @@
     <h4>Properties</h4>
     <div id="common-props">
       <label>Label:</label>
-      <input type="text" id="prop-label" oninput="updateLabel(this.value)">
+      <input type="text" id="prop-label" onchange="pushHistory()" oninput="updateLabel(this.value)">
       <div style="font-size:10px; color:#666; margin-bottom:8px;">Try: R_1, V_{in}, x^2, \Omega</div>
       <button onclick="deleteSelected()" style="width:100%; background:#fff; border:1px solid #d93025; color:#d93025; border-radius:3px; padding:4px; cursor:pointer;">Delete</button>
     </div>
     
     <div id="wire-props" style="display:none;">
-      <label style="margin-top:10px;"><input type="checkbox" id="prop-current" onchange="toggleCurrent(this.checked)"> Show Current Arrow</label>
+      <label style="margin-top:10px;"><input type="checkbox" id="prop-current" onchange="toggleCurrent(this.checked); pushHistory()"> Show Current Arrow</label>
       <label>Current Value:</label>
-      <input type="text" id="prop-current-val" oninput="updateCurrentVal(this.value)" placeholder="e.g. I = 2A">
+      <input type="text" id="prop-current-val" onchange="pushHistory()" oninput="updateCurrentVal(this.value)" placeholder="e.g. I = 2A">
     </div>
   </div>
 </div>
@@ -163,7 +176,7 @@ let width, height;
 // --- State ---
 let components = [];
 let wires = [];
-let dragging = null; // { item, type, offsetX, offsetY }
+let dragging = null; 
 let selected = null;
 
 let showGrid = true;
@@ -172,6 +185,11 @@ let showWireHandles = true;
 const SNAP_DIST = 15;
 const ALIGN_DIST = 15;
 const GRID_SIZE = 20;
+
+// --- History State ---
+let historyStack = [];
+let redoStack = [];
+const MAX_HISTORY = 20;
 
 // --- Initialization ---
 function resize() {
@@ -185,7 +203,90 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// --- Rich Text Parser ---
+// --- History Functions ---
+
+// Deep copy the current state
+function getState() {
+  // We need to serialize the classes to simple objects to store them
+  // When restoring, we must re-instantiate the classes
+  return {
+    components: components.map(c => ({...c})), // Shallow copy of properties is enough if no nested objects
+    wires: wires.map(w => ({...w}))
+  };
+}
+
+function restoreState(state) {
+  selected = null; // Deselect on undo/redo to avoid ghost selections
+  document.querySelector('.prop-box').style.display = 'none';
+
+  components = state.components.map(d => {
+    let c = new Component(d.type, d.x, d.y);
+    Object.assign(c, d);
+    return c;
+  });
+  
+  wires = state.wires.map(d => {
+    let w = new Wire(d.x1, d.y1, d.x2, d.y2);
+    Object.assign(w, d);
+    return w;
+  });
+  
+  draw();
+}
+
+function pushHistory() {
+  const state = getState();
+  historyStack.push(state);
+  if (historyStack.length > MAX_HISTORY) historyStack.shift();
+  redoStack = []; // Clear redo on new action
+  updateButtons();
+}
+
+function undo() {
+  if (historyStack.length === 0) return;
+  // Save current state to redo stack
+  redoStack.push(getState());
+  
+  const prevState = historyStack.pop();
+  restoreState(prevState);
+  updateButtons();
+}
+
+function redo() {
+  if (redoStack.length === 0) return;
+  // Save current state to history stack
+  historyStack.push(getState());
+  
+  const nextState = redoStack.pop();
+  restoreState(nextState);
+  updateButtons();
+}
+
+function updateButtons() {
+  document.getElementById('btn-undo').disabled = historyStack.length === 0;
+  document.getElementById('btn-redo').disabled = redoStack.length === 0;
+}
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+    e.preventDefault();
+    undo();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+    e.preventDefault();
+    redo();
+  }
+  // Delete key
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (document.activeElement.tagName !== 'INPUT') { // Don't delete while typing
+         deleteSelected();
+      }
+  }
+});
+
+// --- Rich Text & Models (Unchanged logic, just ensure classes are available) ---
+
 function parseRichText(text) {
   let p = text
     .replace(/\\Omega/g, 'Ω').replace(/\\Delta/g, 'Δ').replace(/\\theta/g, 'θ')
@@ -247,14 +348,12 @@ function drawRichText(ctx, text, x, y, fontSize = 16, align='center') {
   ctx.restore();
 }
 
-// --- Models ---
 class Component {
   constructor(type, x, y) {
     this.type = type;
     this.x = x;
     this.y = y;
     this.label = "";
-    // Label position relative to component center
     this.labelX = 0; 
     this.labelY = -35; 
     this.nodes = this.getNodesConfig(type);
@@ -321,21 +420,15 @@ class Component {
         break;
     }
     
-    // Draw Label (Movable)
     if (this.label) {
       ctx.fillStyle = selected === this ? '#2196F3' : 'black';
-      // Draw a small invisible handle box if selected?
       if (selected === this) {
-          ctx.beginPath();
-          ctx.arc(this.labelX, this.labelY, 3, 0, Math.PI*2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(this.labelX, this.labelY, 3, 0, Math.PI*2); ctx.fill();
       }
       drawRichText(ctx, this.label, this.labelX, this.labelY, 18, 'center');
     }
-    
     ctx.restore();
   }
-
   getNodesAbs() { return this.nodes.map(n => ({x: this.x + n.x, y: this.y + n.y})); }
 }
 
@@ -363,19 +456,40 @@ class Wire {
   }
 }
 
-// --- Global Functions ---
-function addComponent(type) { components.push(new Component(type, width/2, height/2)); draw(); }
-function addWire() { wires.push(new Wire(width/2 - 50, height/2, width/2 + 50, height/2)); draw(); }
-function toggleGrid(val) { showGrid = val; draw(); }
-function toggleHandles(val) { showWireHandles = val; draw(); }
-function clearCanvas() { if(confirm("Clear diagram?")) { components = []; wires = []; selected = null; document.querySelector('.prop-box').style.display = 'none'; draw(); } }
+// --- Interaction Logic with History Hooks ---
+
+function addComponent(type) { 
+  pushHistory();
+  components.push(new Component(type, width/2, height/2)); 
+  draw(); 
+}
+
+function addWire() { 
+  pushHistory();
+  wires.push(new Wire(width/2 - 50, height/2, width/2 + 50, height/2)); 
+  draw(); 
+}
+
 function deleteSelected() { 
   if (selected) {
+    pushHistory();
     if (selected instanceof Component) components = components.filter(c => c !== selected);
     else wires = wires.filter(w => w !== selected);
     selected = null; document.querySelector('.prop-box').style.display = 'none'; draw();
   }
 }
+
+function clearCanvas() { 
+  if(confirm("Clear diagram?")) { 
+    pushHistory();
+    components = []; wires = []; selected = null; 
+    document.querySelector('.prop-box').style.display = 'none'; draw(); 
+  } 
+}
+
+function toggleGrid(val) { showGrid = val; draw(); }
+function toggleHandles(val) { showWireHandles = val; draw(); }
+
 function exportImage() {
   const tCanvas = document.createElement('canvas'); tCanvas.width = width; tCanvas.height = height;
   const tCtx = tCanvas.getContext('2d');
@@ -392,40 +506,29 @@ function exportImage() {
   const link = document.createElement('a'); link.download = 'circuit.png'; link.href = tCanvas.toDataURL(); link.click();
 }
 
-// --- Interaction ---
+// --- Drag & Drop with History ---
+
 function getMouse(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
 
 function hitTest(x, y) {
-  // 1. Wire Ends
   for (let w of wires) {
     if (Math.hypot(w.x1-x, w.y1-y) < 10) return { item: w, type: 'wireStart' };
     if (Math.hypot(w.x2-x, w.y2-y) < 10) return { item: w, type: 'wireEnd' };
   }
-  // 2. Components & Labels
   for (let c of components) {
-    // Check Label Handle (if label exists)
     if (c.label) {
-      // Global position of label handle
-      const lx = c.x + c.labelX;
-      const ly = c.y + c.labelY;
-      if (Math.hypot(x - lx, y - ly) < 15) { // Generous hit area for text
-        return { item: c, type: 'label', offsetX: x - lx, offsetY: y - ly };
-      }
+      const lx = c.x + c.labelX, ly = c.y + c.labelY;
+      if (Math.hypot(x - lx, y - ly) < 15) return { item: c, type: 'label', offsetX: x - lx, offsetY: y - ly };
     }
-    // Check Component Body
     if (x > c.x-30 && x < c.x+30 && y > c.y-25 && y < c.y+25) return { item: c, type: 'component', offsetX: x-c.x, offsetY: y-c.y };
   }
-  // 3. Wire Body
   for (let w of wires) {
     const A = x - w.x1, B = y - w.y1, C = w.x2 - w.x1, D = w.y2 - w.y1;
     const dot = A * C + B * D, len_sq = C * C + D * D;
     let param = -1; if (len_sq != 0) param = dot / len_sq;
     let xx, yy;
     if (param < 0) { xx = w.x1; yy = w.y1; } else if (param > 1) { xx = w.x2; yy = w.y2; } else { xx = w.x1 + param * C; yy = w.y1 + param * D; }
-    if (Math.hypot(x - xx, y - yy) < 5) return { 
-        item: w, type: 'wireBody', 
-        dx1: w.x1 - x, dy1: w.y1 - y, dx2: w.x2 - x, dy2: w.y2 - y 
-    };
+    if (Math.hypot(x - xx, y - yy) < 5) return { item: w, type: 'wireBody', dx1: w.x1 - x, dy1: w.y1 - y, dx2: w.x2 - x, dy2: w.y2 - y };
   }
   return null;
 }
@@ -433,8 +536,14 @@ function hitTest(x, y) {
 canvas.addEventListener('mousedown', e => {
   const {x, y} = getMouse(e);
   const hit = hitTest(x, y);
-  if (hit) { dragging = hit; selectItem(hit.item); }
-  else { selected = null; document.querySelector('.prop-box').style.display = 'none'; draw(); }
+  if (hit) { 
+    // START DRAG: Save history before modification
+    pushHistory(); 
+    dragging = hit; 
+    selectItem(hit.item); 
+  } else { 
+    selected = null; document.querySelector('.prop-box').style.display = 'none'; draw(); 
+  }
 });
 
 canvas.addEventListener('mousemove', e => {
@@ -448,9 +557,6 @@ canvas.addEventListener('mousemove', e => {
     dragging.item.x = tx; dragging.item.y = ty;
   }
   else if (dragging.type === 'label') {
-    // Move label RELATIVE to component center
-    // Global mouse X - Component X = Relative Label X
-    // We add offset to keep cursor relative to text anchor
     dragging.item.labelX = (x - dragging.item.x) - dragging.offsetX;
     dragging.item.labelY = (y - dragging.item.y) - dragging.offsetY;
   }
@@ -532,6 +638,9 @@ function draw() {
   wires.forEach(w => w.draw(ctx));
   components.forEach(c => c.draw(ctx));
 }
+
+// Initial update for undo/redo buttons
+updateButtons();
 </script>
 </body>
 </html>
